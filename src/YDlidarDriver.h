@@ -100,7 +100,7 @@ class YDlidarDriver : public DriverInterface {
    */
   virtual const char *DescribeError(bool isTCP = true);
 
-
+  void printPacket(const uint8_t* data, size_t size, const std::string& prefix = "");// 新增打印func
   /*!
   * @brief Disconnect the LiDAR.
   */

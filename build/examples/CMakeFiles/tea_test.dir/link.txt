@@ -1,0 +1,1 @@
+/usr/bin/c++ -rdynamic CMakeFiles/tea_test.dir/tea_test.cpp.o -o ../tea_test  ../libydlidar_sdk.a -lpthread -lrt 

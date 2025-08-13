@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
+cmake_policy(SET CMP0079 NEW) 
 project(ydlidar_sdk C CXX)
 
 #########################################################
@@ -16,8 +17,11 @@ ELSE()
 	SET(CMAKE_MRPT_WORD_SIZE 32)
 ENDIF()
 ##################################################
-# Add c++11 Flag
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 ##########################################################
 IF (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -78,13 +82,14 @@ find_package(SWIG)
 find_package(PythonInterp)
 find_package(PythonLibs)
 find_package(GTest)
-
+find_package(PCL REQUIRED COMPONENTS common visualization)
+find_package(OpenCV REQUIRED)
 ############################################################################
 # include headers
 include_directories(.)
 include_directories(core)
 include_directories(src)
-
+include_directories(${PCL_INCLUDE_DIRS})
 #############################################################################
 # addd subdirectory
 add_subdirectory(core)
@@ -122,7 +127,10 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} ${SDK_LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
+target_link_libraries(tmini_test
+	${OpenCV_LIBS} 	
+    ${PCL_LIBRARIES}  # 添加这行
+)
 #############################################################################################
 #static library
 #ydlidar_add_library(${PROJECT_NAME}_static STATIC ${SDK_SOURCES} ${SDK_HEADERS} ${GENERATED_HEADERS})

@@ -583,10 +583,10 @@ namespace ydlidar
       public:
         enum
         {
-          DEFAULT_TIMEOUT = 2000,    /**< Default timeout. */
-          DEFAULT_HEART_BEAT = 1000, /**< Default heartbeat timeout. */
-          MAX_SCAN_NODES = 5000,     /**< Default Max Scan Count. */
-          DEFAULT_TIMEOUT_COUNT = 2, /**< Default Timeout Count. */
+          DEFAULT_TIMEOUT = 5000,    /**< 默认超时时间. */
+          DEFAULT_HEART_BEAT = 10000, /**< 默认检测掉电功能时间. */
+          MAX_SCAN_NODES = 160 * 3,     /**< 最大扫描点数. */
+          DEFAULT_TIMEOUT_COUNT = 3, // 错误数
         };
 
       protected:

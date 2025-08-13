@@ -55,7 +55,7 @@ namespace ydlidar
     trans_delay = 0;
     scan_frequence = 0;
     m_sampling_rate = -1;
-    model = YDLIDAR_S2PRO;
+    model = YDLIDAR_TminiPlus;
     retryCount = 0;
     has_device_header = false;
     m_SingleChannel = false;
@@ -264,14 +264,45 @@ namespace ydlidar
   {
     return m_isConnected;
   }
+  void YDlidarDriver::printPacket(const uint8_t* data, size_t size, const std::string& prefix) {
+    printf("[%s] Packet (%zu bytes): ", prefix.c_str(), size);
+    for (size_t i = 0; i < size; ++i) {
+        printf("%02X ", data[i]);
+    }
+    printf("\n");
 
+    // 可选：打印ASCII字符（非控制字符）
+    printf("        ASCII: ");
+    for (size_t i = 0; i < size; ++i) {
+        if (data[i] >= 32 && data[i] <= 126) { // 可打印字符范围
+            printf("%c ", data[i]);
+        } else {
+            printf(". ");
+        }
+    }
+    printf("\n");
+}
   result_t YDlidarDriver::sendCommand(uint8_t cmd, const void *payload,
                                       size_t payloadsize)
   {
     uint8_t pkt_header[10];
     cmd_packet *header = reinterpret_cast<cmd_packet *>(pkt_header);
     uint8_t checksum = 0;
-
+      if (m_Debug) { // 只有调试模式开启时打印
+      std::vector<uint8_t> fullPacket;
+      fullPacket.push_back(header->syncByte);
+      fullPacket.push_back(header->cmd_flag);
+      
+      if ((cmd & LIDAR_CMDFLAG_HAS_PAYLOAD) && payloadsize && payload) {
+          fullPacket.push_back(static_cast<uint8_t>(payloadsize));
+          fullPacket.insert(fullPacket.end(), 
+              (uint8_t*)payload, 
+              (uint8_t*)payload + payloadsize);
+          fullPacket.push_back(checksum);
+      }
+      
+      printPacket(fullPacket.data(), fullPacket.size(), "TX");
+    }
     if (!m_isConnected)
     {
       return RESULT_FAIL;

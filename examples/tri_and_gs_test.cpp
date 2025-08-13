@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
     bool isSingleChannel = false;
     float frequency = 8.0;
     std::string port = "/dev/ttyUSB0";
-    int baudrate = 921600;
+    int baudrate = 230400;
     //////////////////////string property/////////////////
     /// lidar port
     lidarGs.setlidaropt(LidarPropSerialPort, port.c_str(), port.size());
@@ -100,8 +100,8 @@ int main(int argc, char *argv[])
   {
     bool isSingleChannel = false;
     float frequency = 8.0;
-    std::string port = "/dev/ttyUSB1";
-    int baudrate = 115200;
+    std::string port = "/dev/ttyUSB0";
+    int baudrate = 230400;
     //////////////////////string property/////////////////
     /// lidar port
     lidarS2.setlidaropt(LidarPropSerialPort, port.c_str(), port.size());

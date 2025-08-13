@@ -1,9 +1,9 @@
-﻿#include <iostream>
+#include <iostream>
 #include <string>
-#include <algorithm>
-#include <cctype>
+#include <map>
 #include "CYdLidar.h"
 #include "core/common/ydlidar_help.h"
+#include <opencv2/opencv.hpp>
 
 using namespace std;
 using namespace ydlidar;
@@ -13,180 +13,174 @@ using namespace ydlidar::core::common;
 #pragma comment(lib, "ydlidar_sdk.lib")
 #endif
 
-
 int main(int argc, char *argv[]) 
 {
-  printLogo();
-  os_init();
+    printLogo();
+    os_init();
 
-  std::string port;
-  std::map<std::string, std::string> ports =
-    ydlidar::lidarPortList();
-  std::map<std::string, std::string>::iterator it;
+    // 1. 自动检测雷达端口
+    std::string port;
+    std::map<std::string, std::string> ports = ydlidar::lidarPortList();
+    std::map<std::string, std::string>::iterator it;
 
-  if (ports.size() == 1) {
-    port = ports.begin()->second;
-  } else {
-    int id = 0;
-
-    for (it = ports.begin(); it != ports.end(); it++) {
-      printf("[%d] %s %s\n", id, it->first.c_str(), it->second.c_str());
-      id++;
-    }
-
-    if (ports.empty()) {
-      printf("Not Lidar was detected. Please enter the lidar serial port:");
-      std::cin >> port;
+    if (ports.size() == 1) {
+        port = ports.begin()->second;
     } else {
-      while (ydlidar::os_isOk()) {
-        printf("Please select the lidar port:");
-        std::string number;
-        std::cin >> number;
-
-        if ((size_t)atoi(number.c_str()) >= ports.size()) {
-          continue;
+        int id = 0;
+        for (it = ports.begin(); it != ports.end(); it++) {
+            printf("[%d] %s %s\n", id, it->first.c_str(), it->second.c_str());
+            id++;
         }
 
-        it = ports.begin();
-        id = atoi(number.c_str());
+        if (ports.empty()) {
+            printf("No Lidar was detected. Please enter the lidar serial port:");
+            std::cin >> port;
+        } else {
+            while (ydlidar::os_isOk()) {
+                printf("Please select the lidar port:");
+                std::string number;
+                std::cin >> number;
 
-        while (id) {
-          id--;
-          it++;
+                if ((size_t)atoi(number.c_str()) >= ports.size()) {
+                    continue;
+                }
+
+                it = ports.begin();
+                id = atoi(number.c_str());
+
+                while (id) {
+                    id--;
+                    it++;
+                }
+
+                port = it->second;
+                break;
+            }
+        }
+    }
+
+    // 2. 配置雷达参数
+    int baudrate = 230400;
+    bool isSingleChannel = false;
+    float frequency = 10.0f;
+
+    CYdLidar laser;
+
+    // 2.1 字符串参数
+    laser.setlidaropt(LidarPropSerialPort, port.c_str(), port.size());
+    std::string ignore_array;
+    laser.setlidaropt(LidarPropIgnoreArray, ignore_array.c_str(), ignore_array.size());
+
+    // 2.2 整数参数
+    laser.setlidaropt(LidarPropSerialBaudrate, &baudrate, sizeof(int));
+    int optval = TYPE_TRIANGLE; // Tmini Pro/Plus 雷达类型
+    laser.setlidaropt(LidarPropLidarType, &optval, sizeof(int));
+    optval = YDLIDAR_TYPE_SERIAL;
+    laser.setlidaropt(LidarPropDeviceType, &optval, sizeof(int));
+    optval = isSingleChannel ? 3 : 4; // 采样率
+    laser.setlidaropt(LidarPropSampleRate, &optval, sizeof(int));
+    optval = 8; // 强度位数
+    laser.setlidaropt(LidarPropIntenstiyBit, &optval, sizeof(int));
+
+    // 2.3 布尔参数
+    bool b_optvalue = true;
+    laser.setlidaropt(LidarPropFixedResolution, &b_optvalue, sizeof(bool));
+    b_optvalue = false;
+    laser.setlidaropt(LidarPropReversion, &b_optvalue, sizeof(bool));
+    laser.setlidaropt(LidarPropInverted, &b_optvalue, sizeof(bool));
+    b_optvalue = true;
+    laser.setlidaropt(LidarPropAutoReconnect, &b_optvalue, sizeof(bool));
+    laser.setlidaropt(LidarPropSingleChannel, &isSingleChannel, sizeof(bool));
+    laser.setlidaropt(LidarPropIntenstiy, &b_optvalue, sizeof(bool));
+    b_optvalue = false;
+    laser.setlidaropt(LidarPropSupportMotorDtrCtrl, &b_optvalue, sizeof(bool));
+    laser.setlidaropt(LidarPropSupportHeartBeat, &b_optvalue, sizeof(bool));
+
+    // 2.4 浮点参数
+    float f_optvalue = 180.0f;
+    laser.setlidaropt(LidarPropMaxAngle, &f_optvalue, sizeof(float));
+    f_optvalue = -180.0f;
+    laser.setlidaropt(LidarPropMinAngle, &f_optvalue, sizeof(float));
+    f_optvalue = 64.0f;
+    laser.setlidaropt(LidarPropMaxRange, &f_optvalue, sizeof(float));
+    f_optvalue = 0.05f;
+    laser.setlidaropt(LidarPropMinRange, &f_optvalue, sizeof(float));
+    laser.setlidaropt(LidarPropScanFrequency, &frequency, sizeof(float));
+
+    // 3. 禁用噪声过滤（可选）
+    laser.enableGlassNoise(false);
+    laser.enableSunNoise(false);
+
+    // 4. 初始化雷达
+    bool ret = laser.initialize();
+    if (!ret) {
+        fprintf(stderr, "Fail to initialize: %s\n", laser.DescribeError());
+        return -1;
+    }
+
+    // 5. 获取俯仰角（仅森合雷达支持）
+    float pitch = 0.0f;
+    if (!laser.getPitchAngle(pitch)) {
+        fprintf(stderr, "Fail to get pitch angle\n");
+    } else {
+        printf("Pitch angle: %.02f°\n", pitch);
+    }
+
+    // 6. 启动扫描
+    ret = laser.turnOn();
+    if (!ret) {
+        fprintf(stderr, "Fail to start: %s\n", laser.DescribeError());
+        return -1;
+    }
+
+    // 7. OpenCV 可视化窗口
+    const int WINDOW_SIZE = 800;
+    cv::namedWindow("Lidar Point Cloud", cv::WINDOW_AUTOSIZE);
+    cv::Mat pointCloudImg(WINDOW_SIZE, WINDOW_SIZE, CV_8UC3, cv::Scalar(0, 0, 0));
+
+    // 8. 主循环：获取数据并显示
+    LaserScan scan;
+    while (ydlidar::os_isOk()) {
+    if (laser.doProcessSimple(scan)) {
+        // 8.1 清空画布
+        pointCloudImg.setTo(cv::Scalar(0, 0, 0));
+
+        // 8.2 绘制坐标轴（红色 X 轴，绿色 Y 轴）
+        cv::line(pointCloudImg, cv::Point(WINDOW_SIZE/2, 0), cv::Point(WINDOW_SIZE/2, WINDOW_SIZE), cv::Scalar(0, 0, 255), 1);
+        cv::line(pointCloudImg, cv::Point(0, WINDOW_SIZE/2), cv::Point(WINDOW_SIZE, WINDOW_SIZE/2), cv::Scalar(0, 255, 0), 1);
+
+        // 8.3 绘制点云（调整缩放比例，使点云更清晰）
+        float scale = 50.0f;  // 缩放比例（可调整）
+        float offset = WINDOW_SIZE / 2.0f;
+
+        for (size_t i = 0; i < scan.points.size(); ++i) {
+            const LaserPoint &p = scan.points.at(i);
+            float x = p.range * cos(p.angle);
+            float y = p.range * sin(p.angle);
+            
+            // 调整缩放比例
+            int imgX = static_cast<int>(x * scale + offset);
+            int imgY = static_cast<int>(-y * scale + offset);
+            
+            // 检查点是否在窗口范围内
+            if (imgX >= 0 && imgX < WINDOW_SIZE && imgY >= 0 && imgY < WINDOW_SIZE) {
+                // 设置点的大小（5 像素）和颜色（绿色）
+                cv::circle(pointCloudImg, cv::Point(imgX, imgY), 1, cv::Scalar(0, 255, 0), -1);
+            }
         }
 
-        port = it->second;
-        break;
-      }
+        // 8.4 显示图像
+        cv::imshow("Lidar Point Cloud", pointCloudImg);
+        if (cv::waitKey(10) == 27) break; // ESC 退出
+    } else {
+        fprintf(stderr, "Failed to get Lidar Data\n");
     }
-  }
+}
 
-  int baudrate = 230400;
-  bool isSingleChannel = false;
-  float frequency = 10.0;
+    // 9. 关闭雷达
+    laser.turnOff();
+    laser.disconnecting();
+    cv::destroyAllWindows();
 
-  CYdLidar laser;
-  //////////////////////string property/////////////////
-  /// lidar port
-  laser.setlidaropt(LidarPropSerialPort, port.c_str(), port.size());
-  /// ignore array
-  std::string ignore_array;
-  ignore_array.clear();
-  laser.setlidaropt(LidarPropIgnoreArray, ignore_array.c_str(),
-                    ignore_array.size());
-
-  //////////////////////int property/////////////////
-  /// lidar baudrate
-  laser.setlidaropt(LidarPropSerialBaudrate, &baudrate, sizeof(int));
-  //TYPE_TRIANGLE(Tmini Pro\Tmini Plus),TYPE_TOF(Tmini Plus(森合))
-  int optval = TYPE_TRIANGLE;
-  laser.setlidaropt(LidarPropLidarType, &optval, sizeof(int));
-  /// device type
-  optval = YDLIDAR_TYPE_SERIAL;
-  laser.setlidaropt(LidarPropDeviceType, &optval, sizeof(int));
-  /// sample rate
-  optval = isSingleChannel ? 3 : 4;
-  laser.setlidaropt(LidarPropSampleRate, &optval, sizeof(int));
-  /// abnormal count
-  optval = 4;
-  laser.setlidaropt(LidarPropAbnormalCheckCount, &optval, sizeof(int));
-  /// Intenstiy bit count
-  optval = 8;
-  laser.setlidaropt(LidarPropIntenstiyBit, &optval, sizeof(int));
-
-  //////////////////////bool property/////////////////
-  /// fixed angle resolution
-  bool b_optvalue = true;
-  laser.setlidaropt(LidarPropFixedResolution, &b_optvalue, sizeof(bool));
-  b_optvalue = false;
-  /// rotate 180
-  laser.setlidaropt(LidarPropReversion, &b_optvalue, sizeof(bool));
-  /// Counterclockwise
-  laser.setlidaropt(LidarPropInverted, &b_optvalue, sizeof(bool));
-  b_optvalue = true;
-  laser.setlidaropt(LidarPropAutoReconnect, &b_optvalue, sizeof(bool));
-  /// one-way communication
-  laser.setlidaropt(LidarPropSingleChannel, &isSingleChannel, sizeof(bool));
-  /// intensity
-  b_optvalue = true;
-  laser.setlidaropt(LidarPropIntenstiy, &b_optvalue, sizeof(bool));
-  /// Motor DTR
-  b_optvalue = false;
-  laser.setlidaropt(LidarPropSupportMotorDtrCtrl, &b_optvalue, sizeof(bool));
-  /// HeartBeat
-  b_optvalue = false;
-  laser.setlidaropt(LidarPropSupportHeartBeat, &b_optvalue, sizeof(bool));
-
-  //////////////////////float property/////////////////
-  /// unit: °
-  float f_optvalue = 180.0f;
-  laser.setlidaropt(LidarPropMaxAngle, &f_optvalue, sizeof(float));
-  f_optvalue = -180.0f;
-  laser.setlidaropt(LidarPropMinAngle, &f_optvalue, sizeof(float));
-  /// unit: m
-  f_optvalue = 64.f;
-  laser.setlidaropt(LidarPropMaxRange, &f_optvalue, sizeof(float));
-  f_optvalue = 0.05f;
-  laser.setlidaropt(LidarPropMinRange, &f_optvalue, sizeof(float));
-  /// unit: Hz
-  laser.setlidaropt(LidarPropScanFrequency, &frequency, sizeof(float));
-
-  //禁用阳光玻璃过滤
-  laser.enableGlassNoise(false);
-  laser.enableSunNoise(false);
-
-  //laser.setEnableDebug(true); //调试开关
-
-  bool ret = laser.initialize();
-  if (!ret) 
-  {
-    error("Fail to initialize %s", laser.DescribeError());
-    return -1;
-  }
-
-  //森合获取俯仰角值
-  float pitch = .0f;
-  if (!laser.getPitchAngle(pitch))
-  {
-    warn("Fail to get pitch angle");
-  }
-  else
-  {
-    info("Pitch angle [%.02f]°", pitch);
-  }
-
-  //启动扫描
-  ret = laser.turnOn();
-  if (!ret) 
-  {
-    error("Fail to start %s", laser.DescribeError());
-    return -1;
-  }
-
-  LaserScan scan;
-  while (ydlidar::os_isOk())
-  {
-    if (laser.doProcessSimple(scan))
-    {
-      info("[%u] points [%.02f(%.02f)]Hz",
-              (unsigned int)scan.points.size(),
-              scan.scanFreq,
-              1.0 / scan.config.scan_time);
-      // for (size_t i = 0; i < scan.points.size(); ++i)
-      // {
-      //   const LaserPoint &p = scan.points.at(i);
-      //   info("%d a %.01f r %.04f i %.0f", 
-      //     i, p.angle * 180.0 / M_PI, p.range, p.intensity);
-      // }
-    }
-    else
-    {
-        error("Failed to get Lidar Data");
-    }
-  }
-
-  laser.turnOff();
-  laser.disconnecting();
-
-  return 0;
+    return 0;
 }
